@@ -11,38 +11,34 @@ import (
 )
 
 type Optimizer struct {
-	cloudWatch        *cloudwatch.CloudWatch
-	ecs               *ecs.ECS
-	ecsCluster        string
-	ecsService        string
-	currentDef        map[string]int64
-	desiredPercentage float64
+	cloudWatch *cloudwatch.CloudWatch
+	ecs        *ecs.ECS
+	config     *config
+	currentDef map[string]int64
 }
 
 type OptimizerOutput struct {
 	Cluster           string             `json:"cluster"`
 	Service           string             `json:"service"`
-	DesiredPercentage float64            `json:"desiredPercentage"`
+	DesiredPercentage map[string]float64 `json:"desiredPercentage"`
 	CurrentDef        map[string]int64   `json:"currentDef"`
 	Utilization       map[string]float64 `json:"utilization"`
 	Proposal          map[string]float64 `json:"proposal"`
 }
 
-func NewOptimizer(region string, cluster string, service string, profile string) *Optimizer {
+func NewOptimizer(config *config) *Optimizer {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config:                  aws.Config{Region: aws.String(region)},
-		Profile:                 profile,
+		Config:                  aws.Config{Region: aws.String(config.region)},
+		Profile:                 config.profile,
 		AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
 		SharedConfigState:       session.SharedConfigEnable,
 	}))
 
 	return &Optimizer{
-		cloudWatch:        cloudwatch.New(sess),
-		ecs:               ecs.New(sess),
-		ecsCluster:        cluster,
-		ecsService:        service,
-		currentDef:        make(map[string]int64, 3),
-		desiredPercentage: 80,
+		cloudWatch: cloudwatch.New(sess),
+		ecs:        ecs.New(sess),
+		config:     config,
+		currentDef: make(map[string]int64, 3),
 	}
 }
 
@@ -62,9 +58,9 @@ func (o *Optimizer) Run() (*OptimizerOutput, error) {
 	}
 
 	return &OptimizerOutput{
-		Cluster:           o.ecsCluster,
-		Service:           o.ecsService,
-		DesiredPercentage: o.desiredPercentage,
+		Cluster:           o.config.ecsCluster,
+		Service:           o.config.ecsService,
+		DesiredPercentage: o.config.desiredPercentage,
 		CurrentDef:        o.currentDef,
 		Utilization: map[string]float64{
 			"cpu":    cpuAvgMetric,
@@ -90,11 +86,11 @@ func (o *Optimizer) getAvgOfMetricStatistics(metricName string) (float64, error)
 		Dimensions: []*cloudwatch.Dimension{
 			{
 				Name:  aws.String("ClusterName"),
-				Value: aws.String(o.ecsCluster),
+				Value: aws.String(o.config.ecsCluster),
 			},
 			{
 				Name:  aws.String("ServiceName"),
-				Value: aws.String(o.ecsService),
+				Value: aws.String(o.config.ecsService),
 			},
 		},
 		Unit: aws.String(cloudwatch.StandardUnitPercent),
@@ -108,8 +104,8 @@ func (o *Optimizer) getAvgOfMetricStatistics(metricName string) (float64, error)
 
 func (o *Optimizer) loadCurrentDefinition() error {
 	ss, err := o.ecs.DescribeServices(&ecs.DescribeServicesInput{
-		Cluster:  aws.String(o.ecsCluster),
-		Services: []*string{aws.String(o.ecsService)},
+		Cluster:  aws.String(o.config.ecsCluster),
+		Services: []*string{aws.String(o.config.ecsService)},
 	})
 	if err != nil {
 		return err
@@ -135,5 +131,5 @@ func round(f float64) float64 {
 }
 
 func (o *Optimizer) calculateProposal(avgUtilization float64, attr string) float64 {
-	return round((avgUtilization / 100) * float64(o.currentDef[attr]) * (100 / o.desiredPercentage))
+	return round((avgUtilization / 100) * float64(o.currentDef[attr]) * (100 / o.config.desiredPercentage[attr]))
 }
