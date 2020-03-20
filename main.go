@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	flag "github.com/spf13/pflag"
+	"io"
 	"os"
 )
 
@@ -18,11 +19,12 @@ var (
 )
 
 type config struct {
-	region            string
-	ecsCluster        string
-	ecsService        string
-	profile           string
-	desiredPercentage map[string]float64
+	outStream, errStream io.Writer
+	region               string
+	ecsCluster           string
+	ecsService           string
+	profile              string
+	desiredPercentage    map[string]float64
 }
 
 func main() {
@@ -31,7 +33,25 @@ func main() {
 
 func _main() int {
 	flag.Parse()
-	optimizer := NewOptimizer(&config{
+	config := newConfig()
+	optimizer := NewOptimizer(config)
+	output, err := optimizer.Run()
+	if err != nil {
+		fmt.Fprintln(config.errStream, "Error:", err)
+		return 1
+	}
+
+	if err := renderReportAsJSON(output, config.outStream); err != nil {
+		fmt.Fprintln(config.errStream, "Error:", err)
+		return 1
+	}
+	return 0
+}
+
+func newConfig() *config {
+	return &config{
+		outStream:  os.Stdout,
+		errStream:  os.Stderr,
 		region:     *region,
 		ecsCluster: *cluster,
 		ecsService: *service,
@@ -40,16 +60,5 @@ func _main() int {
 			"cpu":    *cpuDesiredPercentage,
 			"memory": *memoryDesiredPercentage,
 		},
-	})
-	output, err := optimizer.Run()
-	if err != nil {
-		fmt.Println("Error:", err)
-		return 1
 	}
-
-	if err := renderReportAsJSON(output); err != nil {
-		fmt.Println("Error:", err)
-		return 1
-	}
-	return 0
 }
