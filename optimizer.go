@@ -5,13 +5,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"math"
 	"time"
 )
 
 type Optimizer struct {
-	cloudWatch *cloudwatch.CloudWatch
+	cloudWatch cloudwatchiface.CloudWatchAPI
 	ecs        *ecs.ECS
 	config     *config
 	currentDef map[string]int64
