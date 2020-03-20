@@ -22,7 +22,13 @@ func main() {
 func _main() int {
 	flag.Parse()
 	optimizer := NewOptimizer(*region, *cluster, *service, *profile)
-	if err := optimizer.Run(); err != nil {
+	output, err := optimizer.Run()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return 1
+	}
+
+	if err := renderReportAsJSON(output); err != nil {
 		fmt.Println("Error:", err)
 		return 1
 	}

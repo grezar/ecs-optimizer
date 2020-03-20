@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -12,12 +11,21 @@ import (
 )
 
 type Optimizer struct {
-	cloudWatch *cloudwatch.CloudWatch
-	ecs        *ecs.ECS
-	ecsCluster string
-	ecsService string
-	currentDef map[string]int64
-	percentage float64
+	cloudWatch        *cloudwatch.CloudWatch
+	ecs               *ecs.ECS
+	ecsCluster        string
+	ecsService        string
+	currentDef        map[string]int64
+	desiredPercentage float64
+}
+
+type OptimizerOutput struct {
+	Cluster           string             `json:"cluster"`
+	Service           string             `json:"service"`
+	DesiredPercentage float64            `json:"desiredPercentage"`
+	CurrentDef        map[string]int64   `json:"currentDef"`
+	Utilization       map[string]float64 `json:"utilization"`
+	Proposal          map[string]float64 `json:"proposal"`
 }
 
 func NewOptimizer(region string, cluster string, service string, profile string) *Optimizer {
@@ -29,33 +37,44 @@ func NewOptimizer(region string, cluster string, service string, profile string)
 	}))
 
 	return &Optimizer{
-		cloudWatch: cloudwatch.New(sess),
-		ecs:        ecs.New(sess),
-		ecsCluster: cluster,
-		ecsService: service,
-		currentDef: make(map[string]int64, 3),
-		percentage: 80,
+		cloudWatch:        cloudwatch.New(sess),
+		ecs:               ecs.New(sess),
+		ecsCluster:        cluster,
+		ecsService:        service,
+		currentDef:        make(map[string]int64, 3),
+		desiredPercentage: 80,
 	}
 }
 
-func (o *Optimizer) Run() error {
+func (o *Optimizer) Run() (*OptimizerOutput, error) {
 	if err := o.loadCurrentDefinition(); err != nil {
-		return err
+		return nil, err
 	}
 
 	cpuAvgMetric, err := o.getAvgOfMetricStatistics("CPUUtilization")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	memoryAvgMetric, err := o.getAvgOfMetricStatistics("MemoryUtilization")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Println("Proposed CPU Units", round((cpuAvgMetric/100)*float64(o.currentDef["cpu"])*(100/o.percentage)))
-	fmt.Println("Proposed Memory", round((memoryAvgMetric/100)*float64(o.currentDef["memory"])*(100/o.percentage)))
-	return nil
+	return &OptimizerOutput{
+		Cluster:           o.ecsCluster,
+		Service:           o.ecsService,
+		DesiredPercentage: o.desiredPercentage,
+		CurrentDef:        o.currentDef,
+		Utilization: map[string]float64{
+			"cpu":    cpuAvgMetric,
+			"memory": memoryAvgMetric,
+		},
+		Proposal: map[string]float64{
+			"cpu":    o.calculateProposal(cpuAvgMetric, "cpu"),
+			"memory": o.calculateProposal(memoryAvgMetric, "memory"),
+		},
+	}, nil
 }
 
 func (o *Optimizer) getAvgOfMetricStatistics(metricName string) (float64, error) {
@@ -113,4 +132,8 @@ func (o *Optimizer) loadCurrentDefinition() error {
 func round(f float64) float64 {
 	// +1.5 in order to return 1 at least
 	return math.Ceil(f+1.5) - 1
+}
+
+func (o *Optimizer) calculateProposal(avgUtilization float64, attr string) float64 {
+	return round((avgUtilization / 100) * float64(o.currentDef[attr]) * (100 / o.desiredPercentage))
 }
