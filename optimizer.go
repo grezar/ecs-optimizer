@@ -7,13 +7,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/ecs/ecsiface"
 	"math"
 	"time"
 )
 
 type Optimizer struct {
 	cloudWatch cloudwatchiface.CloudWatchAPI
-	ecs        *ecs.ECS
+	ecs        ecsiface.ECSAPI
 	config     *config
 	currentDef map[string]int64
 }
@@ -42,7 +43,6 @@ func NewOptimizer(config *config) *Optimizer {
 		currentDef: make(map[string]int64, 3),
 	}
 }
-
 func (o *Optimizer) Run() (*OptimizerOutput, error) {
 	if err := o.loadCurrentDefinition(); err != nil {
 		return nil, err
