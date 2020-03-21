@@ -10,6 +10,7 @@ import (
 var Version = "0.1.0"
 
 var (
+	version                 *bool    = flag.BoolP("version", "v", false, "Print version")
 	region                  *string  = flag.StringP("region", "r", "ap-northeast-1", "AWS region")
 	cluster                 *string  = flag.StringP("cluster", "c", "", "ECS cluster name")
 	service                 *string  = flag.StringP("service", "s", "", "ECS service name")
@@ -33,6 +34,10 @@ func main() {
 
 func _main() int {
 	flag.Parse()
+	if *version {
+		fmt.Println("ecs-optimizer", Version)
+		return 0
+	}
 	config := newConfig()
 	optimizer := NewOptimizer(config)
 	output, err := optimizer.Run()
