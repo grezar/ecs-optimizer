@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/ecs/ecsiface"
-	"math"
 	"time"
 )
 
@@ -124,11 +123,6 @@ func (o *Optimizer) loadCurrentDefinition() error {
 	o.currentDef["reservedMemory"] = aws.Int64Value(output.TaskDefinition.ContainerDefinitions[0].MemoryReservation)
 
 	return nil
-}
-
-func round(f float64) float64 {
-	// +1.5 in order to return 1 at least
-	return math.Ceil(f+1.5) - 1
 }
 
 func (o *Optimizer) calculateProposal(avgUtilization float64, attr string) float64 {
